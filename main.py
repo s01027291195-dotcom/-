@@ -4,6 +4,7 @@ from discord import app_commands
 import sqlite3
 import random
 import os
+import time
 
 # ---------------- 기본 설정 ----------------
 intents = discord.Intents.default()
@@ -22,7 +23,8 @@ cursor = conn.cursor()
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS money (
     user_id INTEGER PRIMARY KEY,
-    balance INTEGER
+    balance INTEGER,
+    last_claim INTEGER
 )
 """)
 
@@ -140,26 +142,51 @@ async def on_voice_state_update(member, before, after):
             cursor.execute("DELETE FROM channels WHERE channel_id=?", (before.channel.id,))
             conn.commit()
 
-# ---------------- 돈 시스템 ----------------
+# ---------------- 돈 시스템 (24시간 지급) ----------------
 @bot.tree.command(name="돈줘")
 async def give_money(interaction: discord.Interaction):
     user_id = interaction.user.id
+    now = int(time.time())
 
-    cursor.execute("SELECT * FROM money WHERE user_id=?", (user_id,))
-    if cursor.fetchone():
-        return await interaction.response.send_message("이미 받음", ephemeral=True)
+    cursor.execute("SELECT balance, last_claim FROM money WHERE user_id=?", (user_id,))
+    result = cursor.fetchone()
 
-    cursor.execute("INSERT INTO money VALUES (?, ?)", (user_id, 10000))
+    if result:
+        balance, last_claim = result
+
+        if now - last_claim < 86400:
+            remain = 86400 - (now - last_claim)
+            hours = remain // 3600
+            minutes = (remain % 3600) // 60
+
+            return await interaction.response.send_message(
+                f"⏳ 아직 못받음\n남은시간: {hours}시간 {minutes}분",
+                ephemeral=True
+            )
+
+        balance += 10000
+        cursor.execute(
+            "UPDATE money SET balance=?, last_claim=? WHERE user_id=?",
+            (balance, now, user_id)
+        )
+
+    else:
+        cursor.execute(
+            "INSERT INTO money VALUES (?, ?, ?)",
+            (user_id, 10000, now)
+        )
+
     conn.commit()
 
     embed = discord.Embed(
         title="💰 돈 지급",
-        description="✅ 10,000머니 지급 완료\n🎮 /도박 해보세요",
+        description="✅ 10,000머니 지급 완료",
         color=discord.Color.green()
     )
 
     await interaction.response.send_message(embed=embed)
 
+# ---------------- 도박 ----------------
 @bot.tree.command(name="도박")
 @app_commands.describe(베팅="베팅 금액 입력")
 async def gamble(interaction: discord.Interaction, 베팅: int):
