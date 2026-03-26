@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import sqlite3
 import random
+import os
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -208,4 +209,5 @@ async def on_ready():
     await bot.tree.sync()
     print(f"{bot.user} 준비 완료!")
 
-bot.run("MTQ4NjY3OTMwODg3NjY0NDQ3Mg.GoZKbG.IBiMR29QlfNvd-oKFVoi5f2knp4E5GkiyyqZq4")
+access_token = os.environ["BOT_TOKEN"]
+client.run(access_token)
