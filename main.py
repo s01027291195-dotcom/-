@@ -210,4 +210,4 @@ async def on_ready():
     print(f"{bot.user} 준비 완료!")
 
 access_token = os.environ["BOT_TOKEN"]
-client.run(access_token)
+bot.run(access_token)
