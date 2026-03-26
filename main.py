@@ -5,6 +5,7 @@ import sqlite3
 import random
 import os
 
+# ---------------- 기본 설정 ----------------
 intents = discord.Intents.default()
 intents.guilds = True
 intents.voice_states = True
@@ -15,7 +16,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 CATEGORY_ID = 1486640616753463369
 
 # ---------------- DB ----------------
-conn = sqlite3.connect("bot.db")
+conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -49,17 +50,22 @@ class GambleView(discord.ui.View):
             return await interaction.response.send_message("본인만 가능", ephemeral=True)
 
         cursor.execute("SELECT balance FROM money WHERE user_id=?", (self.user.id,))
-        balance = cursor.fetchone()[0]
+        result = cursor.fetchone()
+
+        if not result:
+            return await interaction.response.send_message("데이터 없음", ephemeral=True)
+
+        balance = result[0]
 
         if random.random() < self.win_chance:
             balance += self.amount
             title = "🎉 도박 성공"
-            result = f"🎯 +{self.amount:,}머니"
+            result_text = f"🎯 +{self.amount:,}머니"
             color = discord.Color.green()
         else:
             balance -= self.amount
             title = "💀 도박 실패"
-            result = f"💀 -{self.amount:,}머니"
+            result_text = f"💀 -{self.amount:,}머니"
             color = discord.Color.red()
 
         cursor.execute("UPDATE money SET balance=? WHERE user_id=?", (balance, self.user.id))
@@ -67,7 +73,7 @@ class GambleView(discord.ui.View):
 
         embed = discord.Embed(
             title=title,
-            description=f"🎲 확률: {int(self.win_chance*100)}%\n\n{result}\n\n💰 잔액: {balance:,}",
+            description=f"🎲 확률: {int(self.win_chance*100)}%\n\n{result_text}\n\n💰 잔액: {balance:,}",
             color=color
         )
 
@@ -82,6 +88,7 @@ class VoiceModal(discord.ui.Modal, title="보이스채널 생성"):
     async def on_submit(self, interaction: discord.Interaction):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
+
         user_limit = int(self.limit.value) if self.limit.value.isdigit() else 0
 
         new_channel = await guild.create_voice_channel(
@@ -93,7 +100,6 @@ class VoiceModal(discord.ui.Modal, title="보이스채널 생성"):
         cursor.execute("INSERT INTO channels VALUES (?, ?)", (new_channel.id, interaction.user.id))
         conn.commit()
 
-        # ✅ 본인만 보이는 임베드
         embed = discord.Embed(
             title="🎤 보이스 채널 생성됨",
             color=discord.Color.green()
@@ -169,7 +175,6 @@ async def gamble(interaction: discord.Interaction, 베팅: int):
     if 베팅 <= 0 or 베팅 > balance:
         return await interaction.response.send_message("금액 오류", ephemeral=True)
 
-    # 🔥 금액 많을수록 확률 감소
     ratio = 베팅 / balance
     win_chance = 0.6 - (ratio * 0.5)
     win_chance = max(0.1, min(0.6, win_chance))
@@ -208,6 +213,7 @@ async def rename(interaction: discord.Interaction, 이름: str):
 async def on_ready():
     await bot.tree.sync()
     print(f"{bot.user} 준비 완료!")
+    print("봇 완전히 실행됨")
 
-access_token = os.environ["BOT_TOKEN"]
-bot.run(access_token)
+# ---------------- 실행 ----------------
+bot.run(os.getenv("BOT_TOKEN"))
